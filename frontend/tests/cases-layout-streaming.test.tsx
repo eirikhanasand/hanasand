@@ -4,8 +4,13 @@ import { mock } from 'bun:test'
 import { createElement, type ReactNode } from 'react'
 import { renderToReadableStream } from 'react-dom/server'
 
-let release: (allowed: boolean) => void = () => {}
-mock.module('@/utils/organizations/management', () => ({ canManageOrganizations: () => new Promise<boolean>(resolve => { release = resolve }) }))
+let releaseSidebar: () => void = () => {}
+mock.module('@/utils/thesis', () => ({
+    loadThesisForRender: () => new Promise(resolve => {
+        releaseSidebar = () => resolve({ state: 'unavailable' } as never)
+    })
+}))
+mock.module('@/utils/users/fetchUser', () => ({ default: async () => null }))
 mock.module('next/headers', () => ({
     cookies: async () => ({ get: (name: string) => ['id', 'access_token'].includes(name) ? { value: 'fixture' } : undefined }),
     headers: async () => ({ get: () => '/cases' }),
@@ -19,16 +24,15 @@ mock.module('@/components/header/header', () => ({ default: () => null }))
 mock.module('@/components/box/detachedBoxHost', () => ({ default: () => null }))
 mock.module('@/components/impersonation/impersonationBanner', () => ({ default: () => null }))
 const { default: Layout } = await import('../src/app/layout')
-for (const allowed of [true, false]) {
-    const start = performance.now()
-    const reader = (await renderToReadableStream(await Layout({ children: createElement('h1', null, 'Cases content') }))).getReader()
-    const first = await Promise.race([reader.read(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Sidebar permission blocks cases')), 1000))])
-    const shell = new TextDecoder().decode(first.value)
-    assert(shell.includes('Cases content'))
-    assert(!shell.includes('Management allowed'))
-    console.log(`Cases shell before sidebar permission resolves: ${(performance.now() - start).toFixed(2)} ms`)
-    release(allowed)
-    let rest = ''
-    for (;;) { const next = await reader.read(); if (next.done) break; rest += new TextDecoder().decode(next.value) }
-    assert.equal(rest.includes('Management allowed'), allowed)
-}
+const start = performance.now()
+const reader = (await renderToReadableStream(await Layout({ children: createElement('h1', null, 'Cases content') }))).getReader()
+const first = await Promise.race([reader.read(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Sidebar data blocks cases')), 1000))])
+const shell = new TextDecoder().decode(first.value)
+assert(shell.includes('Cases content'))
+assert(!shell.includes('Management allowed'))
+console.log(`Cases shell before sidebar navigation resolves: ${(performance.now() - start).toFixed(2)} ms`)
+releaseSidebar()
+let rest = ''
+for (;;) { const next = await reader.read(); if (next.done) break; rest += new TextDecoder().decode(next.value) }
+assert(rest.length > 0)
+assert(!rest.includes('Management allowed'))
